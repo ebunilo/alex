@@ -150,8 +150,12 @@ resource "aws_apprunner_service" "researcher" {
   }
   
   instance_configuration {
-    cpu    = "1 vCPU"
-    memory = "2 GB"
+    # Bumped from 1 vCPU / 2 GB to 2 vCPU / 4 GB.
+    # Headless Chromium (via Playwright MCP) needs ~1.5 GB on its own; on the
+    # smaller instance the container was being killed under memory pressure and
+    # `browser_navigate` MCP calls were timing out (>60s cold-start navigation).
+    cpu    = "2 vCPU"
+    memory = "4 GB"
     instance_role_arn = aws_iam_role.app_runner_instance_role.arn
   }
   

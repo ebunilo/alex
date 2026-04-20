@@ -41,25 +41,34 @@ async def run_research_agent(topic: str = None) -> str:
     else:
         query = DEFAULT_RESEARCH_PROMPT
 
-    # Please override these variables with the region you are using
-    # Other choices: us-west-2 (for OpenAI OSS models) and eu-central-1
+    # AWS region is still set so boto3 clients used elsewhere (tools.py etc.) have a default.
+    # The model below is OpenAI direct (not Bedrock) so region is not used for model calls.
     REGION = "us-east-1"
-    os.environ["AWS_REGION_NAME"] = REGION  # LiteLLM's preferred variable
+    os.environ["AWS_REGION_NAME"] = REGION  # LiteLLM's preferred variable (harmless when unused)
     os.environ["AWS_REGION"] = REGION  # Boto3 standard
     os.environ["AWS_DEFAULT_REGION"] = REGION  # Fallback
 
-    # Please override this variable with the model you are using
-    # Common choices: bedrock/eu.amazon.nova-pro-v1:0 for EU and bedrock/us.amazon.nova-pro-v1:0 for US
-    # or bedrock/amazon.nova-pro-v1:0 if you are not using inference profiles
-    # bedrock/openai.gpt-oss-120b-1:0 for OpenAI OSS models
-    # bedrock/converse/us.anthropic.claude-sonnet-4-20250514-v1:0 for Claude Sonnet 4
-    # NOTE that nova-pro is needed to support tools and MCP servers; nova-lite is not enough - thank you Yuelin L.!
-    MODEL = "bedrock/us.amazon.nova-pro-v1:0"
+    # TEMPORARY: Using OpenAI API directly because Bedrock daily token quotas on this AWS
+    # account are effectively zero across multiple regions (us-east-1 Nova Pro, us-west-2
+    # OSS 120B, eu-central-1 Nova Pro). A Service Quotas increase has been requested and
+    # once granted, flip this back to one of the Bedrock alternatives below.
+    # LiteLLM auto-picks up OPENAI_API_KEY from the environment.
+    # Bedrock alternatives (re-enable once quota is granted):
+    #   bedrock/us.amazon.nova-pro-v1:0           (US Nova Pro inference profile)
+    #   bedrock/eu.amazon.nova-pro-v1:0           (EU Nova Pro inference profile)
+    #   bedrock/openai.gpt-oss-120b-1:0           (us-west-2 only)
+    #   bedrock/converse/us.anthropic.claude-sonnet-4-20250514-v1:0
+    # NOTE: nova-pro (not nova-lite) is required for tools/MCP support.
+    # gpt-4.1-mini has a 1M-token context window, which is what the researcher needs:
+    # Playwright MCP tool results can return 20-50k tokens per page snapshot, and a
+    # multi-page research run with max_turns=15 easily exceeds the 128k context of
+    # gpt-4o-mini. gpt-4.1-mini supports tools/MCP and is still very cheap.
+    MODEL = "gpt-4.1-mini"
     model = LitellmModel(model=MODEL)
 
     # Create and run the agent with MCP server
     with trace("Researcher"):
-        async with create_playwright_mcp_server(timeout_seconds=60) as playwright_mcp:
+        async with create_playwright_mcp_server(timeout_seconds=180) as playwright_mcp:
             agent = Agent(
                 name="Alex Investment Researcher",
                 instructions=get_agent_instructions(),
@@ -68,7 +77,12 @@ async def run_research_agent(topic: str = None) -> str:
                 mcp_servers=[playwright_mcp],
             )
 
-            result = await Runner.run(agent, input=query, max_turns=15)
+            # max_turns=8 pairs with the hard-ruled prompt in context.py.
+            # Happy path is 4 turns (nav -> snapshot -> ingest -> final), so
+            # 8 leaves headroom without letting a spiralling agent exceed
+            # App Runner's 120s request timeout. If the prompt is ever
+            # loosened to allow more browsing, bump this up in step.
+            result = await Runner.run(agent, input=query, max_turns=8)
 
     return result.final_output
 
