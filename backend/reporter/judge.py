@@ -17,15 +17,17 @@ class Evaluation(BaseModel):
 
 
 async def evaluate(original_instructions, original_task, original_output) -> Evaluation:
-    # Get model configuration
+    # BEDROCK_MODEL_ID is kept for backward compat but the value is now a
+    # full LiteLLM provider-prefixed string (e.g. "openai/gpt-4.1-mini" or
+    # "bedrock/us.amazon.nova-pro-v1:0").
     model_id = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-3-7-sonnet-20250219-v1:0")
-    # Set region for LiteLLM Bedrock calls
+    # Region is harmless when using OpenAI; kept for the Bedrock path.
     bedrock_region = os.getenv("BEDROCK_REGION", "us-west-2")
     logger.info(f"DEBUG: BEDROCK_REGION from env = {bedrock_region}")
     os.environ["AWS_REGION_NAME"] = bedrock_region
     logger.info(f"DEBUG: Set AWS_REGION_NAME to {bedrock_region}")
 
-    model = LitellmModel(model=f"bedrock/{model_id}")
+    model = LitellmModel(model=model_id)
 
     instructions = """
 You are an Evaluation Agent that evaluates the quality of a financial report from a financial planning agent.

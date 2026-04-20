@@ -171,14 +171,18 @@ async def classify_instrument(
         Complete classification with allocations
     """
     try:
-        # Initialize the model
+        # BEDROCK_MODEL_ID is kept for backward compat but the value is now a
+        # full LiteLLM provider-prefixed string (e.g. "openai/gpt-4.1-mini"
+        # or "bedrock/us.amazon.nova-pro-v1:0"). We swapped to OpenAI because
+        # Bedrock Nova/OSS quotas are zero on this account.
         model_id = BEDROCK_MODEL_ID
 
-        # Set region for LiteLLM Bedrock calls
+        # Set region for LiteLLM Bedrock calls (harmless for OpenAI; boto3
+        # still needs a region for Aurora Data API calls).
         bedrock_region = os.getenv("BEDROCK_REGION", "us-west-2")
         os.environ["AWS_REGION_NAME"] = bedrock_region
 
-        model = LitellmModel(model=f"bedrock/{model_id}")
+        model = LitellmModel(model=model_id)
 
         # Create the classification task
         task = CLASSIFICATION_PROMPT.format(

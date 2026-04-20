@@ -140,16 +140,19 @@ def analyze_portfolio(portfolio_data: Dict[str, Any]) -> str:
 def create_agent(job_id: str, portfolio_data: Dict[str, Any], db=None):
     """Create the charter agent without tools - will output JSON directly."""
     
-    # Get model configuration
+    # BEDROCK_MODEL_ID is kept for backward compat but the value is now a
+    # full LiteLLM provider-prefixed string (e.g. "openai/gpt-4.1-mini" or
+    # "bedrock/us.amazon.nova-pro-v1:0"). Swapped to OpenAI because Bedrock
+    # Nova/OSS quotas are zero on this account.
     model_id = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-3-7-sonnet-20250219-v1:0")
-    # Set region for LiteLLM Bedrock calls
+    # Region is harmless when using OpenAI; kept for the Bedrock path.
     bedrock_region = os.getenv("BEDROCK_REGION", "us-west-2")
     os.environ["AWS_REGION_NAME"] = bedrock_region
     
     logger.info(f"Charter: Creating agent with model_id={model_id}, region={bedrock_region}")
     logger.info(f"Charter: Job ID: {job_id}")
     
-    model = LitellmModel(model=f"bedrock/{model_id}")
+    model = LitellmModel(model=model_id)
     
     # Analyze the portfolio upfront
     portfolio_analysis = analyze_portfolio(portfolio_data)

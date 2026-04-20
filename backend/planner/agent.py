@@ -262,13 +262,18 @@ def create_agent(job_id: str, portfolio_summary: Dict[str, Any], db):
     # Create context for tools
     context = PlannerContext(job_id=job_id)
 
-    # Get model configuration
+    # Get model configuration. BEDROCK_MODEL_ID is kept for backward compat
+    # but the value is now a full LiteLLM provider-prefixed model string
+    # (e.g. "openai/gpt-4.1-mini" or "bedrock/us.amazon.nova-pro-v1:0").
+    # We swapped to OpenAI because Bedrock Nova/OSS quotas are zero on this
+    # account; revert to a bedrock/... string once a quota increase lands.
     model_id = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-3-7-sonnet-20250219-v1:0")
-    # Set region for LiteLLM Bedrock calls
+    # Set region for LiteLLM Bedrock calls (harmless when using OpenAI;
+    # boto3 still needs a region for Aurora Data API / S3 Vectors calls).
     bedrock_region = os.getenv("BEDROCK_REGION", "us-west-2")
     os.environ["AWS_REGION_NAME"] = bedrock_region
 
-    model = LitellmModel(model=f"bedrock/{model_id}")
+    model = LitellmModel(model=model_id)
 
     tools = [
         invoke_reporter,
