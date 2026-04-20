@@ -8,11 +8,19 @@ dependencies = [
     "boto3>=1.40.6",
     "fastapi>=0.116.1",
     "httpx>=0.28.1",
-    "openai-agents[litellm]>=0.2.4",
     "playwright>=1.54.0",
     "pydantic>=2.11.7",
     "python-dotenv>=1.1.1",
     "requests>=2.32.4",
     "tenacity>=9.1.2",
     "uvicorn>=0.35.0",
+]
+
+[project.optional-dependencies]
+# Heavy runtime deps only needed inside the Docker image that hosts the
+# researcher server. Kept out of the base set so host-side scripts like
+# deploy.py and test_research.py don't trigger a Rust source-build of
+# fastuuid on platforms that have no pre-built wheel (e.g. macOS x86_64).
+agent = [
+    "openai-agents[litellm]>=0.2.4",
 ]

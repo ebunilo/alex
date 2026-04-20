@@ -157,20 +157,21 @@ async def test_bedrock():
         import boto3
 
         # Set ALL region environment variables
-        os.environ["AWS_REGION_NAME"] = "us-east-1"
-        os.environ["AWS_REGION"] = "us-east-1"
-        os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
+        REGION = "us-east-1"
+        os.environ["AWS_REGION_NAME"] = REGION
+        os.environ["AWS_REGION"] = REGION
+        os.environ["AWS_DEFAULT_REGION"] = REGION
 
         # Debug: Check what region boto3 is actually using
         session = boto3.Session()
         actual_region = session.region_name
 
         # Try to create Bedrock client explicitly in us-west-2
-        client = boto3.client("bedrock-runtime", region_name="us-west-2")
+        client = boto3.client("bedrock-runtime", region_name="us-east-1")
 
         # Debug: Try to list models to verify connection
         try:
-            bedrock_client = boto3.client("bedrock", region_name="us-west-2")
+            bedrock_client = boto3.client("bedrock", region_name="us-east-1")
             models = bedrock_client.list_foundation_models()
             openai_models = [
                 m["modelId"] for m in models["modelSummaries"] if "openai" in m["modelId"].lower()
@@ -179,7 +180,7 @@ async def test_bedrock():
             openai_models = f"Error listing: {str(list_error)}"
 
         # Try basic model invocation with Nova Pro
-        model = LitellmModel(model="bedrock/amazon.nova-pro-v1:0")
+        model = LitellmModel(model="bedrock/us.amazon.nova-pro-v1:0")
 
         agent = Agent(
             name="Test Agent",

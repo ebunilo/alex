@@ -20,7 +20,8 @@ COPY pyproject.toml uv.lock ./
 
 # Install Python dependencies during build
 # uv will automatically install packages for the container's architecture (linux/amd64)
-RUN uv sync --frozen --no-install-project
+# --extra agent pulls in openai-agents[litellm] which is only needed inside the server image
+RUN uv sync --frozen --no-install-project --extra agent
 
 # Copy application code
 COPY *.py ./
