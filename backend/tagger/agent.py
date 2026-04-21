@@ -100,6 +100,18 @@ class InstrumentClassification(BaseModel):
     instrument_type: str = Field(description="Type: etf, stock, mutual_fund, bond_fund, etc.")
     current_price: float = Field(description="Current price per share in USD", gt=0)
 
+    # Rationale placed BEFORE the allocation fields on purpose: with structured
+    # outputs the model generates fields in declaration order, so putting the
+    # reasoning first forces chain-of-thought before committing to numbers.
+    rationale: str = Field(
+        description=(
+            "Detailed explanation of why these classifications were chosen, "
+            "including the specific factors considered (e.g. fund prospectus, "
+            "issuer, benchmark index, typical sector weights). Write 2-4 "
+            "sentences before emitting the allocation numbers."
+        )
+    )
+
     # Separate allocation objects
     allocation_asset_class: AllocationBreakdown = Field(description="Asset class breakdown")
     allocation_regions: RegionAllocation = Field(description="Regional breakdown")
@@ -201,8 +213,16 @@ async def classify_instrument(
 
             result = await Runner.run(agent, input=task, max_turns=5)
 
-            # Extract the structured output from RunResult using final_output_as
-            return result.final_output_as(InstrumentClassification)
+            classification = result.final_output_as(InstrumentClassification)
+
+            # Log the explainability rationale so it shows up in CloudWatch
+            # (and in LangFuse / OpenAI traces once observability is wired).
+            full_json = classification.model_dump_json()
+            logger.info(
+                f"Classification rationale for {symbol}: "
+                f"{classification.rationale} | Full object: {full_json}"
+            )
+            return classification
 
     except Exception as e:
         logger.error(f"Error classifying {symbol}: {e}")

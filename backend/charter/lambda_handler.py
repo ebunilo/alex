@@ -28,6 +28,43 @@ from observability import observe
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+
+def validate_charts_payload(charts_data: Dict[str, Any]) -> tuple[bool, str]:
+    """
+    Guardrail: validate the shape of the charts payload the LLM produced before
+    we persist it. The frontend assumes each chart has a `type` string and a
+    `data` list of dicts; malformed shapes would render as broken charts in the
+    UI. Returning (False, reason) here prevents the DB write.
+    """
+    if not isinstance(charts_data, dict) or not charts_data:
+        return False, "charts_data must be a non-empty dict"
+
+    for key, chart in charts_data.items():
+        if not isinstance(chart, dict):
+            return False, f"chart '{key}' is not a dict"
+
+        chart_type = chart.get("type")
+        if not isinstance(chart_type, str) or not chart_type:
+            return False, f"chart '{key}' missing/invalid 'type' field"
+
+        data = chart.get("data")
+        if not isinstance(data, list) or not data:
+            return False, f"chart '{key}' has missing/empty 'data' list"
+
+        for i, point in enumerate(data):
+            if not isinstance(point, dict):
+                return False, f"chart '{key}' data[{i}] is not a dict"
+            # Pie/donut and bar charts all use the name+value shape in this app.
+            if chart_type in ("pie", "donut", "bar", "horizontalBar"):
+                if "name" not in point or "value" not in point:
+                    return (
+                        False,
+                        f"chart '{key}' ({chart_type}) data[{i}] missing 'name' or 'value'",
+                    )
+
+    return True, ""
+
+
 @retry(
     retry=retry_if_exception_type(RateLimitError),
     stop=stop_after_attempt(5),
@@ -98,9 +135,15 @@ async def run_charter_agent(job_id: str, portfolio_data: Dict[str, Any], db=None
                             charts_data[chart_key] = chart_copy
                         
                         logger.info(f"Charter: Created charts_data with keys: {list(charts_data.keys())}")
-                        
-                        # Save to database
-                        if db and charts_data:
+
+                        # Guardrail: validate shape before persisting. If the
+                        # LLM produced something the UI can't render, we'd
+                        # rather fail fast here than ship broken charts.
+                        is_valid, reason = validate_charts_payload(charts_data)
+                        if not is_valid:
+                            logger.error(f"Charter: Guardrail rejected charts payload: {reason}")
+                            charts_data = None
+                        elif db and charts_data:
                             try:
                                 success = db.jobs.update_charts(job_id, charts_data)
                                 charts_saved = bool(success)
