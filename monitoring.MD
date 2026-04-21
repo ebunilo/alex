@@ -11,3 +11,6 @@
 **Note** 
 - The Bedrock Model was swapped with OpenAI Model because of zero token allocation.
 - Hence, the Bedrock graphs were empty
+
+## LangFuse
+![LangFuse](images/langfuse.png)
